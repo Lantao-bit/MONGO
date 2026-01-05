@@ -1,0 +1,29 @@
+[
+    {
+        "_id": {
+            "$sod": "695b619f858d432a69e738cc"
+        },
+        "name": "Alan Tan",
+        "dateOfBirth": {
+            "$date": "2001-12-13"
+        },
+        "certificates": [
+            {
+                "certificationName": "Life Saving I",
+                "date": {
+                    "date": "2025-09-12"
+                }
+            }
+        ],
+        "parent": {
+            "id":{
+                "$oid": "695b619f858d432a69e738cc"
+            },
+            "name": "Alan Tan"
+
+        },
+        "sessions":[
+            
+        ]
+    }
+]

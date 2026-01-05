@@ -1,0 +1,19 @@
+[
+    {
+        "_id": {
+            "$sid": "695b5cc5d53ef7f48dadb877"
+        },
+        "name": "Tom Tan",
+        "contact": [
+            "+65 123456",
+            "+65 323233"
+        ],
+        "email": "abc@def.com",
+        "address": {
+            "streetName": "Yishun Ring Road",
+            "buildingName": "Blk 123",
+            "unitNumber": "1312",
+            "floor": "13"
+        }
+    }
+]
