@@ -1,11 +1,11 @@
 // to show all databases on the cluster
-show databases;
+//show databases;
 
 // we want to work with one of the database
-use sample_airbnb;
+//use sample_airbnb;
 
 // see all the collections
-show collections;
+//show collections;
 
 //  the variable `db` will refer to the current active database
 // then we use the dot syntax to refer to the collection
@@ -21,7 +21,7 @@ db.listingsAndReviews.find().limit(2);
 // Projection - tells Mongo which keys we want
 
 // only show the name, description, address and beds key
-db.listingsAndReviews.find({},{
+db.listingsAndReviews.find({}, {
     "name": 1,
     "description": 1,
     "address": 1,
@@ -51,8 +51,8 @@ db.listingsAndReviews.find({
 
 // find all listings from Brazil
 db.listingsAndReviews.find({
-    "address.country":"Brazil"
-},{
+    "address.country": "Brazil"
+}, {
     "name": 1,
     "address.country": 1
 })
@@ -60,7 +60,7 @@ db.listingsAndReviews.find({
 // .count() will return the total number of listings
 // Show how many listings are in Brazil
 db.listingsAndReviews.find({
-    "address.country":"Brazil"
+    "address.country": "Brazil"
 }).count();
 
 // .distinct("<key">) will show all the unique values for key
@@ -69,8 +69,8 @@ db.listingsAndReviews.distinct("address.country");
 // find all the listings in Brazil that has 2 beds 
 db.listingsAndReviews.find({
     "beds": 2,
-    "address.country":"Turkey"
-},{
+    "address.country": "Turkey"
+}, {
     "name": 1,
     "beds": 1,
     "address.country": 1
@@ -88,7 +88,7 @@ db.listingsAndReviews.find({
     "beds": {
         "$gt": 2
     }
-},{
+}, {
     'name': 1,
     'beds': 1
 })
@@ -99,7 +99,7 @@ db.listingsAndReviews.find({
         "$gte": 2,
         "$lte": 4
     }
-},{
+}, {
     'name': 1,
     'beds': 1
 })
@@ -111,12 +111,66 @@ db.listingsAndReviews.find({
     "beds": {
         "$gte": 2,
         "$lte": 4
-    }, 
+    },
     "price": {
         "$lte": 200
     }
-},{
+}, {
     'name': 1,
     'beds': 1,
     "price": 1
 })
+
+// find by a single element in an array
+db.listingsAndReviews.find({
+    amenities: "Washer"
+}, {
+    name: 1,
+    amenities: 1
+})
+
+// find by more than one element in an array
+db.listingsAndReviews.find({
+    amenities: {
+        $all: ["Washer","Hair dryer"]
+    }
+}, {
+    name: 1,
+    amenities: 1
+})
+
+// find all listing that have been reviewed by Bart
+db.listingsAndReviews.find({
+    reviews: {
+        $elemMatch:{
+            reviewer_name:"Bart"
+        }
+    }
+},{
+    name: 1,
+    reviews: 1
+})
+
+//find all listings which first review was before 2019
+db.listingsAndReviews.find({
+    first_review:{
+        $lt: ISODate("2019-01-01")
+    }
+},{
+    name:1,
+    first_review:1
+})
+
+//searching by string matches is too exact
+// we use regular expression to match by string patterns
+db.listingsAndReviews.find({
+    name:{
+        $regex: "Spacious",
+        $options: "i"
+    }
+},{
+    name:1
+})
+
+// find by _id
+
