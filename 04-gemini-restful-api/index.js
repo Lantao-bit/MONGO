@@ -4,6 +4,7 @@ require('dotenv').config();  // put the variables in the .env file into process.
 const cors = require('cors');
 const { connect } = require("./db");
 const { ObjectId } = require('mongodb');
+const { ai, generateSearchParams, generateRecipe} = require('./gemini');
 
 // SETUP EXPRESS
 const app = express();
@@ -80,7 +81,7 @@ async function main() {
     const db = await connect(mongoUri, dbName);
 
     // ROUTES
-    app.get('/test', function (req, res) {
+    app.get('', function (req, res) {
         res.json({
             "message": "Hello world"
         })
@@ -269,6 +270,77 @@ async function main() {
             })
         }
 
+    })
+
+    app.get('/ai/recipes', async function(req,res){
+        const query = req.query.q;
+
+        const allCuisines = await db.collection('cuisines').distinct('name');
+        const allTags = await db.collection('tags').distinct('name');
+        const allIngredients = await db.collection('recipes').distinct('ingredients.name');
+
+        const searchParams = await generateSearchParams(query, allTags, allCuisines, allIngredients);
+        console.log(searchParams);
+        const criteria = {};
+
+        if (searchParams.cuisines && searchParams.cuisines.length > 0) {
+            criteria["cuisine.name"] = {
+                $in: searchParams.cuisines
+            }
+        }
+
+        if (searchParams.ingredients && searchParams.ingredients.length > 0){
+            criteria["ingredients.name"] = {
+                $all: searchParams.ingredients
+            }
+        }
+
+        if (searchParams.tags && searchParams.tags.length > 0) {
+            criteria['tags.name'] = {
+                $in: searchParams.tags
+            }
+        }
+
+        console.log(criteria);
+
+        const recipes = await db.collection('recipes').find(criteria).toArray();
+        res.json({
+            recipes
+        })
+    })
+
+    app.post('/ai/recipes', async function(req,res){
+        const recipeText = req.body.recipeText;
+        const allCuisines = await db.collection('cuisines').distinct('name');
+        const allTags = await db.collection('tags').distinct('name');
+        const newRecipe = await generateRecipe(recipeText, allCuisines, allTags);
+        
+        // get the cuisine document
+        const cuisineDoc = await db.collection('cuisines').findOne({
+            "name": newRecipe.cuisine
+        });
+
+        if (cuisineDoc) {
+            newRecipe.cuisine = cuisineDoc;
+        } else {
+            return res.status(404).json({
+                "error":"AI tried to use a cuisine that doesn't exist"
+            })
+        }
+
+        // get all the tags that corresponds 
+        const tagDocs = await db.collection('tags').find({
+            'name': {
+                $in: newRecipe.tags
+            }
+        }).toArray();
+        newRecipe.tags = tagDocs;
+
+        // insert into the database
+        const result = await db.collection('recipes').insertOne(newRecipe);
+        res.json({
+            recipeId: result.insertedId
+        })
     })
 }
 main();
