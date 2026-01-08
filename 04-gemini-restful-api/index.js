@@ -4,16 +4,38 @@ require('dotenv').config();  // put the variables in the .env file into process.
 const cors = require('cors');
 const { connect } = require("./db");
 const { ObjectId } = require('mongodb');
-const { ai, generateSearchParams, generateRecipe} = require('./gemini');
+const { ai, generateSearchParams, generateRecipe } = require('./gemini');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { verifyToken } = require("./middlewares")
 
 // SETUP EXPRESS
 const app = express();
+
+// app.use is to activate middleware
 app.use(cors()); // enable CORS for API
 app.use(express.json()); // tell Express that we are sending and reciving JSON
 
 // SETUP DATABASE
 const mongoUri = process.env.MONGO_URI;
 const dbName = "recipe_book";
+
+function generateAccessToken(id, email) {
+    // jwt.sign creates a JWT
+    // first parameter -> object payload, or token data, the data that is in the JWT (i.e "claims")
+    // second parameter -> your secret key
+    // third parameter -> options object
+    return jwt.sign(
+        {
+            "user_id": id,
+            "email": email
+        },
+        process.env.TOKEN_SECRET,
+        {
+            // m = minutes, h = hours, s = seconds, d = days, w = weeks
+            "expiresIn": "1h"
+        });
+}
 
 async function validateRecipe(db, request) {
     const { name, cuisine, prepTime, cookTime, servings, ingredients, instructions, tags } = request;
@@ -81,7 +103,7 @@ async function main() {
     const db = await connect(mongoUri, dbName);
 
     // ROUTES
-    app.get('', function (req, res) {
+    app.get('/test', function (req, res) {
         res.json({
             "message": "Hello world"
         })
@@ -139,10 +161,10 @@ async function main() {
 
             // using arrow function:
             const regularExpressionArray = ingredients.split(",").map(
-                ingredient=> new RegExp(ingredient, 'i')
+                ingredient => new RegExp(ingredient, 'i')
             );
 
-            critera['ingredients.name'] =  {
+            critera['ingredients.name'] = {
                 $all: regularExpressionArray
             }
         }
@@ -156,8 +178,19 @@ async function main() {
         })
     })
 
+    // use the route parameter `recipeId` to refer to the recipe we want
+    app.get("/recipes/:recipeId", async function (req, res) {
+        const recipeId = req.params.recipeId;
+        const recipe = await db.collection("recipes").findOne({
+            _id: new ObjectId(recipeId)
+        })
+        res.json({
+            recipe
+        });
+    })
+
     // tags: ["quick", "easy", "vegetarian"]
-    app.post('/recipes', async function (req, res) {
+    app.post('/recipes', verifyToken, async function (req, res) {
         // extract out the various components of the recipe document from req.body
         // const name = req.body.name;
         // const cuisine = req.body.cuisine;
@@ -246,7 +279,7 @@ async function main() {
                 error: status.error
             })
         }
-    })
+    });
 
     app.delete('/recipes/:id', async function (req, res) {
         try {
@@ -270,9 +303,9 @@ async function main() {
             })
         }
 
-    })
+    });
 
-    app.get('/ai/recipes', async function(req,res){
+    app.get('/ai/recipes', async function (req, res) {
         const query = req.query.q;
 
         const allCuisines = await db.collection('cuisines').distinct('name');
@@ -289,7 +322,7 @@ async function main() {
             }
         }
 
-        if (searchParams.ingredients && searchParams.ingredients.length > 0){
+        if (searchParams.ingredients && searchParams.ingredients.length > 0) {
             criteria["ingredients.name"] = {
                 $all: searchParams.ingredients
             }
@@ -309,12 +342,12 @@ async function main() {
         })
     })
 
-    app.post('/ai/recipes', async function(req,res){
+    app.post('/ai/recipes', async function (req, res) {
         const recipeText = req.body.recipeText;
         const allCuisines = await db.collection('cuisines').distinct('name');
         const allTags = await db.collection('tags').distinct('name');
         const newRecipe = await generateRecipe(recipeText, allCuisines, allTags);
-        
+
         // get the cuisine document
         const cuisineDoc = await db.collection('cuisines').findOne({
             "name": newRecipe.cuisine
@@ -324,7 +357,7 @@ async function main() {
             newRecipe.cuisine = cuisineDoc;
         } else {
             return res.status(404).json({
-                "error":"AI tried to use a cuisine that doesn't exist"
+                "error": "AI tried to use a cuisine that doesn't exist"
             })
         }
 
@@ -341,6 +374,75 @@ async function main() {
         res.json({
             recipeId: result.insertedId
         })
+    })
+
+    // register router
+    // sample request body
+    // {
+    //    "email":"test123@gemail.com",
+    //    "password": "rotiprata"
+    // }
+    app.post('/users', async function (req, res) {
+        const result = await db.collection('users')
+            .insertOne({
+                "email": req.body.email,
+                "password": await bcrypt.hash(req.body.password, 12)
+            });
+
+        res.json({
+            message: "New user has been create has been created successfully",
+            userId: result.insertedId
+        })
+    })
+
+    // sample POST body
+    // {
+    //   "email":"test123@gemail.com",
+    //   "password":"rotiprata"
+    // }
+    app.post('/login', async function (req, res) {
+        const { email, password } = req.body;
+        const user = await db.collection("users").findOne({
+            "email": email
+        });
+        // compare takes in two parameters
+        // first parameter: plain text
+        // second parameter: hashed version
+        // return true if they are the same
+        if (user) {
+            const isPasswordValid = await bcrypt.compare(password, user.password);
+            if (isPasswordValid) {
+                // generate JWT
+                const accessToken = generateAccessToken(user._id, user.email)
+
+                // send back JWT
+                res.json({
+                    accessToken
+                })
+            } else {
+                return res.status(401).json({
+                    'error': 'Invalid login'
+                })
+            }
+        } else {
+            return res.status(401).json({
+                'error': 'Invalid login'
+            })
+        }
+
+    })
+
+    // The access token will be in the request's header, in the Authorization field
+    // the format will be "Bearer <JWT>"
+    app.get('/protected', verifyToken, function (req, res) {
+        const tokenData = req.tokenData; // added by the verifyToken middleware
+        res.json({
+            "message": "This is a secret message",
+            tokenData
+        })
+
+
+
     })
 }
 main();
