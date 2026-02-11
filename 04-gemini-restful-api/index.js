@@ -7,7 +7,7 @@ const { ObjectId } = require('mongodb');
 const { ai, generateSearchParams, generateRecipe } = require('./gemini');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { verifyToken } = require("./middlewares")
+const { verifyToken } = require("./middlewares");
 
 // SETUP EXPRESS
 const app = express();
@@ -433,15 +433,13 @@ async function main() {
     })
 
     // The access token will be in the request's header, in the Authorization field
-    // the format will be "Bearer <JWT>"
+    // the format will be "Bearer <JWT>", call middleware to verify the request's token
     app.get('/protected', verifyToken, function (req, res) {
         const tokenData = req.tokenData; // added by the verifyToken middleware
         res.json({
             "message": "This is a secret message",
             tokenData
         })
-
-
 
     })
 }
